@@ -14,10 +14,14 @@ numbers = cellfun(@(C1,C2) str2num(C1(C2)),Header,numbers,'UniformOutput',false)
 
 if numbers{contains(Header,'start of data')} ~= 65536
    Header =  default(1:numbers{contains(Header,'start of data')});
-   Header = regexp(Header,'[^;]','match');
+   Header = regexp(Header,'\n','split')';
+   Header =cellfun(@join,Header,'UniformOutput',false)';
+%    Header = regexp(Header,'[^;]','match');
    data = default(numbers{contains(Header,'start of data')}+1:end);
+   numbers =regexp(Header,'[0-9]');
+   numbers = cellfun(@(C1,C2) str2num(C1(C2)),Header,numbers,'UniformOutput',false);
 end
-Header =cellfun(@join,Header,'UniformOutput',false)';
+% Header =cellfun(@join,Header,'UniformOutput',false)';
 
 if ~any(contains(Header,'Time data'))
     disp('does not contain a time signal')
@@ -27,7 +31,7 @@ end
 nbr_of_chs = numbers{contains(Header,'nbr of channel:')};
 nbr_of_abs = numbers{contains(Header,'nbr of abscissa:')};
 nbr_of_scans = numbers{contains(Header,'nbr of scans:')};
-
+info = generateInfo(Header,nbr_of_chs,nbr_of_abs);
 ch_defs = find(contains(Header,'channel definition:'));
 extra_fields = find(contains(Header,'extra fields'));
 bits_per_channel = [numbers{contains(Header,'implementation type:')}];
@@ -77,57 +81,87 @@ end
 else 
     
 end
-if exist('ch_d','var')
+if strcmp(info.scanmode,'synchronised multiple') && exist('ch_d','var')
+    if isfield(info.channels,'moniker')
+        all_monikers = info.channels.moniker;
+        all_monikers = cellfun(@(C)(strrep(C,'.','_')),all_monikers,'UniformOutput',false);
+        unique_monikers = unique(all_monikers);
+        for moniker = unique_monikers
+            timeData.(moniker{1}) = [];
+            for channel = 1:nbr_of_chs
+                if strcmp(moniker{1},all_monikers{channel})
+                    temp = ch_d.(type{channel})(channel,:);
+                    timeData.(moniker{1}) = [timeData.(moniker{1}) ;temp];
+                end
+            end
+            if length(unique(ch_order(strcmp(all_monikers,moniker{1})))) == 1
+                signalLength = unique(ch_order(strcmp(all_monikers,moniker{1}))) * nbr_of_scans;
+                timeData.(moniker{1}) = timeData.(moniker{1})(:,1:signalLength);
+            end
+        end
+    else
+        disp('could not find moniker of channels, dumping data');
+        timeData = ch_d; 
+    end
+    
+end
+if exist('ch_d','var') && strcmp(info.scanmode,'simultaneous')
     temp = fieldnames(ch_d);
     for k=1:length(temp)
         ch_d.(temp{k})( all(~ch_d.(temp{k}),2), : ) = [];
     end
     timeData = ch_d; 
-else
-    ch( all(~ch,2), : ) = [];
-    timeData= ch;
+% else
+%     ch( all(~ch,2), : ) = [];
+%     timeData= ch;
 end
 
-%% info stuff
-
-% info.fs = numbers{contains(Header,'delta value')};
-% ch_names = Header(contains(Header,'name str:'));
-% info.ch.names = cellfun(@(C)(strtrim(C(strfind(C,':')+1:end))),ch_names,'UniformOutput',false);
-
-%% ch fields 
-fields =Header(contains(Header,':'));
-field_values = cellfun(@(C)(strtrim(C(strfind(C,':')+1:end))),fields,'UniformOutput',false);
-fields = cellfun(@(C)(strtrim(C(1:strfind(C,':')-1))),fields,'UniformOutput',false);
-
-unique_fields=unique(fields);
-occurences_field=cellfun(@(C)(sum(strcmp(fields,C))),unique_fields,'UniformOutput',false);
-clean_unique_fields = regexp(unique_fields,'[;:#.0-9]','split');
-clean_unique_fields =cellfun(@(C)(strrep(strjoin(C,'_'),' ','')),clean_unique_fields,'UniformOutput',false);
-% get rid of double matches in contains leading to non mentioned names
-for k=1:length(occurences_field)
-    switch occurences_field{k}
-        case 1
-            try
-            info.(clean_unique_fields{k}) = field_values{contains(fields,unique_fields{k})};
-            catch
-                disp(['"',clean_unique_fields{k},'" is not a valid field name'])
-            end
-        case nbr_of_chs
-            try
-            info.channels.(clean_unique_fields{k}) =  field_values(strcmp(fields,unique_fields{k}));
-            catch
-                disp(['"',clean_unique_fields{k},'" is not a valid field name'])
-            end
-        case (nbr_of_chs + nbr_of_abs)
-            try
-                temp = field_values(strcmp(fields,unique_fields{k}));
-%                 temp = field_values(contains(fields,unique_fields{k}));
-                info.channels.(clean_unique_fields{k}) = temp(nbr_of_abs+1:end);
-                info.absc.(clean_unique_fields{k}) = temp(1:nbr_of_abs);
-            catch
-                disp(['"',clean_unique_fields{k},'" is not a valid field name'])
-            end
+end
+function info = generateInfo(Header,nbr_of_chs,nbr_of_abs)
+    fields =Header(contains(Header,':'));
+    field_values = cellfun(@(C)(strtrim(C(strfind(C,':')+1:end))),fields,'UniformOutput',false);
+    fields = cellfun(@(C)(strtrim(C(1:strfind(C,':')-1))),fields,'UniformOutput',false);
+    
+    unique_fields=unique(fields);
+    occurences_field=cellfun(@(C)(sum(strcmp(fields,C))),unique_fields,'UniformOutput',false);
+    clean_unique_fields = regexp(unique_fields,'[;:#.0-9]','split');
+    clean_unique_fields =cellfun(@(C)(strrep(strjoin(C,'_'),' ','')),clean_unique_fields,'UniformOutput',false);
+    % clean_unique_fields = cellfun(@(C)(strtok(C)))
+    % get rid of double matches in contains leading to non mentioned names
+    for k=1:length(occurences_field)
+        switch occurences_field{k}
+            case 1
+                try
+                    field = strcat(deal(strtok(clean_unique_fields{k},'_')));
+                    info.(field) = field_values{contains(fields,unique_fields{k})};
+                catch
+                    disp(['"',field,'" is not a valid field name'])
+                end
+            case nbr_of_chs
+                try
+                    field = strcat(deal(strtok(clean_unique_fields{k},'_')));
+                    info.channels.(field) =  field_values(strcmp(fields,unique_fields{k}));
+                catch
+                    disp(['"',field,'" is not a valid field name'])
+                end
+            case (nbr_of_chs + nbr_of_abs)
+                try
+                    temp = field_values(strcmp(fields,unique_fields{k}));
+                    field = strcat(deal(strtok(clean_unique_fields{k})));
+    %                 temp = field_values(contains(fields,unique_fields{k}));
+                    info.channels.(field) = temp(nbr_of_abs+1:end);
+                    info.absc.(field) = temp(1:nbr_of_abs);
+                catch
+                    try
+                        field = strrep(clean_unique_fields{k},'_','')
+                        info.channels.(field) = temp(nbr_of_abs+1:end);
+                        info.absc.(field) = temp(1:nbr_of_abs);
+                    catch
+                        disp(['"',field,'" is not a valid field name'])
+                    end
+                end
+        end
     end
+    info.nbr_of_chn = nbr_of_chs;
+    info.nbr_of_absc = nbr_of_abs;
 end
-info.nbr_of_chn = nbr_of_chs;
-info.nbr_of_absc = nbr_of_abs;

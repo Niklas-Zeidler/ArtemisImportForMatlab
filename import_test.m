@@ -6,7 +6,7 @@ raw_values{k} =theader.theader.channel_group{1, 1}.data_group{1, 1}.channels.nor
 end
 
 %%
-fileName ='\\gbw9061105.got.volvocars.net\NZEIDLER$\Data\Apps\Matlab\PAK_import\PAK_Throughput0\mea_throughput0';
+fileName ='220315_hb_01_Geely_DCT260_Abnormal noise_1G_LOT_001 19.15 - 23.56s.hdf';
 default = fileread(fileName);
 
 %%
@@ -33,3 +33,6 @@ for k=1:nbr_of_scans
         end
     end
 end
+%%
+fileName = 'Test Signal 16(100Hz noise).hdf';
+test = importHDF(fileName);
