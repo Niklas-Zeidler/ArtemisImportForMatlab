@@ -68,13 +68,17 @@ if length(unique_ch_order ) ==1
    unique_ch_order =1; 
 end
 if ~iscell(ch_order)
+    for single_type=unique(type)
+        length_type = unique(bits_per_channel(strcmp(type,single_type)))*nbr_of_scans;
+        ch_d.(single_type{1}) = zeros(sum(strcmp(type,single_type)),length_type,single_type{1});
+    end
 for k=1:nbr_of_scans
     byte_stream_temp = byte_stream((k-1)*bytes_per_scan+1:k*bytes_per_scan);
     for i=1:nbr_of_chs
         if unique_ch_order ==1
             ch(i,(k-1)*ch_order(i)+1:k*ch_order(i))= typecast(byte_stream_temp(start_idx(i):end_idx(i)),type{i});
         else
-            ch_d.(type{i})(i,(k-1)*ch_order(i)+1:k*ch_order(i))= typecast(byte_stream_temp(start_idx(i):end_idx(i)),type{i});
+            ch_d.(type{i})(i,(k-1)*ch_order(i)+1:k*ch_order(i)) = typecast(byte_stream_temp(start_idx(i):end_idx(i)),type{i});
         end
     end
 end
@@ -104,16 +108,14 @@ if strcmp(info.scanmode,'synchronised multiple') && exist('ch_d','var')
         timeData = ch_d; 
     end
     
-end
-if exist('ch_d','var') && strcmp(info.scanmode,'simultaneous')
+elseif exist('ch_d','var') && strcmp(info.scanmode,'simultaneous')
     temp = fieldnames(ch_d);
     for k=1:length(temp)
         ch_d.(temp{k})( all(~ch_d.(temp{k}),2), : ) = [];
     end
     timeData = ch_d; 
-% else
-%     ch( all(~ch,2), : ) = [];
-%     timeData= ch;
+else 
+    timeData= ch;
 end
 
 end
@@ -153,7 +155,7 @@ function info = generateInfo(Header,nbr_of_chs,nbr_of_abs)
                     info.absc.(field) = temp(1:nbr_of_abs);
                 catch
                     try
-                        field = strrep(clean_unique_fields{k},'_','')
+                        field = strrep(clean_unique_fields{k},'_','');
                         info.channels.(field) = temp(nbr_of_abs+1:end);
                         info.absc.(field) = temp(1:nbr_of_abs);
                     catch
