@@ -68,9 +68,11 @@ if length(unique_ch_order ) ==1
    unique_ch_order =1; 
 end
 if ~iscell(ch_order)
-    for single_type=unique(type)
-        length_type = unique(bits_per_channel(strcmp(type,single_type)))*nbr_of_scans;
-        ch_d.(single_type{1}) = zeros(sum(strcmp(type,single_type)),length_type,single_type{1});
+    if unique_ch_order ~=1
+        for single_type=unique(type)
+            length_type = unique(bits_per_channel(strcmp(type,single_type)))*nbr_of_scans;
+            ch_d.(single_type{1}) = zeros(sum(strcmp(type,single_type)),length_type,single_type{1});
+        end
     end
 for k=1:nbr_of_scans
     byte_stream_temp = byte_stream((k-1)*bytes_per_scan+1:k*bytes_per_scan);
